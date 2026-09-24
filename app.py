@@ -32,6 +32,11 @@ st.markdown(
     div[data-testid="stMetric"] label { color: var(--muted); }
     .status-note { border-left: 4px solid var(--amber); background: var(--note); padding: 12px 16px; }
     .method-note { border-left: 4px solid var(--teal); background: var(--method); padding: 12px 16px; }
+    [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] span { color: var(--ink); }
+    [data-testid="stFileUploaderDropzone"] { background: var(--panel); border-color: var(--line); }
+    [data-testid="stFileUploaderDropzone"] * { color: var(--ink) !important; }
+    [data-baseweb="select"] > div { background: var(--panel); border-color: var(--line); color: var(--ink); }
+    [data-baseweb="select"] * { color: var(--ink) !important; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -448,20 +453,22 @@ with cracking_tab:
         evidence = ranking.assign(
             usable_evidence=lambda frame: frame["valid_attacks"] + frame["valid_defences"]
         ).sort_values("usable_evidence")
-        figure, axis = plt.subplots(figsize=(11, 6))
+        evidence_columns = st.columns(2)
         positions = np.arange(len(evidence))
-        axis.barh(positions - 0.18, evidence["valid_attacks"], height=0.34, color=colours["blue"], label="Usable attacks")
-        axis.barh(positions + 0.18, evidence["valid_defences"], height=0.34, color=colours["teal"], label="Usable defences")
-        axis.set(
-            yticks=positions,
-            yticklabels=evidence["code"],
-            xlabel="Usable attempts",
-            title="Usable cracking evidence: attacks and defences",
-        )
-        axis.legend(frameon=False, ncol=2)
-        style_axes(axis)
-        st.pyplot(figure, width="stretch")
-        plt.close(figure)
+        with evidence_columns[0]:
+            figure, axis = plt.subplots(figsize=(7, 6))
+            axis.barh(positions, evidence["valid_attacks"], color=colours["blue"])
+            axis.set(yticks=positions, yticklabels=evidence["code"], xlabel="Usable attempts", title="Usable attacks")
+            style_axes(axis)
+            st.pyplot(figure, width="stretch")
+            plt.close(figure)
+        with evidence_columns[1]:
+            figure, axis = plt.subplots(figsize=(7, 6))
+            axis.barh(positions, evidence["valid_defences"], color=colours["teal"])
+            axis.set(yticks=positions, yticklabels=evidence["code"], xlabel="Usable attempts", title="Usable defences")
+            style_axes(axis)
+            st.pyplot(figure, width="stretch")
+            plt.close(figure)
         st.caption("Usable evidence includes only valid 0/1 outcomes. Invalid or unreliable attempts are excluded from both bars.")
     with cracking_math_tab:
         st.markdown('<a id="cracking-regularisation-maths"></a>', unsafe_allow_html=True)
@@ -496,9 +503,10 @@ with cracking_tab:
         )
 
 with method_tab:
-    st.markdown(
-        "**Regularisation maths:** [peer scores](#peer-regularisation-maths) · "
-        "[cracking and resistance scores](#cracking-regularisation-maths)"
+    st.info(
+        "The regularisation maths is available in the nested tabs: open **Peer fairness** and choose "
+        "**Maths behind peer scores**, or open **Cracking fairness** and choose "
+        "**Maths behind cracking scores**."
     )
     st.subheader("Data quality")
     invalid_share = diagnostics["invalid_count"] / diagnostics["attempt_count"]
