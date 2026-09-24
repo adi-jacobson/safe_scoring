@@ -22,16 +22,16 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    :root { --ink: #17242b; --teal: #007a78; --amber: #d97941; --line: #dbe2e5; }
-    .stApp { background: linear-gradient(180deg, #f4f7f6 0, #ffffff 280px); color: var(--ink); }
-    [data-testid="stHeader"] { background: rgba(244, 247, 246, 0.92); }
-    [data-testid="stSidebar"] { background: #edf2f1; border-right: 1px solid var(--line); }
+    :root { --ink: #17242b; --muted: #52636b; --teal: #007a78; --amber: #d97941; --line: #dbe2e5; --panel: #ffffff; --sidebar: #edf2f1; --canvas: #f4f7f6; --note: #fff8ef; --method: #eef8f7; }
+    .stApp { background: linear-gradient(180deg, var(--canvas) 0, var(--panel) 280px); color: var(--ink); }
+    [data-testid="stHeader"] { background: color-mix(in srgb, var(--canvas) 92%, transparent); }
+    [data-testid="stSidebar"] { background: var(--sidebar); border-right: 1px solid var(--line); }
     h1, h2, h3 { font-family: Georgia, 'Times New Roman', serif; letter-spacing: 0; }
     h1 { font-size: 2.2rem !important; }
-    div[data-testid="stMetric"] { background: #ffffff; border: 1px solid var(--line); padding: 14px; }
-    div[data-testid="stMetric"] label { color: #52636b; }
-    .status-note { border-left: 4px solid var(--amber); background: #fff8ef; padding: 12px 16px; }
-    .method-note { border-left: 4px solid var(--teal); background: #eef8f7; padding: 12px 16px; }
+    div[data-testid="stMetric"] { background: var(--panel); border: 1px solid var(--line); padding: 14px; }
+    div[data-testid="stMetric"] label { color: var(--muted); }
+    .status-note { border-left: 4px solid var(--amber); background: var(--note); padding: 12px 16px; }
+    .method-note { border-left: 4px solid var(--teal); background: var(--method); padding: 12px 16px; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -144,19 +144,52 @@ def audit_frame(ranking: pd.DataFrame) -> pd.DataFrame:
 
 
 def style_axes(axis: plt.Axes) -> None:
+    axis.figure.patch.set_facecolor(colours["panel"])
+    axis.set_facecolor(colours["panel"])
     axis.spines[["top", "right", "left"]].set_visible(False)
-    axis.grid(axis="x", color="#dbe2e5", linewidth=0.8)
+    axis.grid(axis="x", color=colours["grid"], linewidth=0.8)
     axis.set_axisbelow(True)
+    axis.tick_params(colors=colours["ink"])
+    axis.xaxis.label.set_color(colours["ink"])
+    axis.yaxis.label.set_color(colours["ink"])
+    axis.title.set_color(colours["ink"])
+    if axis.legend_ is not None:
+        for text in axis.legend_.get_texts():
+            text.set_color(colours["ink"])
 
 
 with st.sidebar:
     st.header("Workbook")
     uploaded_file = st.file_uploader("Upload scoring spreadsheet", type=["xlsx"])
     use_example = st.checkbox("Use workspace spreadsheet", value=uploaded_file is None)
+    theme = st.selectbox("Appearance", ["Light", "Dark"], help="Choose the app colours for this session.")
     st.caption("Save the workbook in Excel first so cached formula values are current.")
     st.divider()
     st.markdown("**Outcome coding**")
     st.caption("1 = cracked · 0 = valid failure · 0.5 = invalid/unreliable · blank = no attempt")
+
+if theme == "Dark":
+    colours = {
+        "ink": "#edf4f2", "muted": "#b9c8c6", "teal": "#55c7bd", "amber": "#f0a36f",
+        "line": "#40504f", "panel": "#1d292b", "sidebar": "#162123", "canvas": "#11191b",
+        "note": "#3a2d24", "method": "#173735", "grid": "#40504f", "raw": "#8fa4ad",
+        "blue": "#63a9d1", "zero": "#b9c8c6",
+    }
+else:
+    colours = {
+        "ink": "#17242b", "muted": "#52636b", "teal": "#007a78", "amber": "#d97941",
+        "line": "#dbe2e5", "panel": "#ffffff", "sidebar": "#edf2f1", "canvas": "#f4f7f6",
+        "note": "#fff8ef", "method": "#eef8f7", "grid": "#dbe2e5", "raw": "#a7b6c2",
+        "blue": "#2878a5", "zero": "#333333",
+    }
+st.markdown(
+    f"""
+    <style>
+    :root {{ --ink: {colours['ink']}; --muted: {colours['muted']}; --teal: {colours['teal']}; --amber: {colours['amber']}; --line: {colours['line']}; --panel: {colours['panel']}; --sidebar: {colours['sidebar']}; --canvas: {colours['canvas']}; --note: {colours['note']}; --method: {colours['method']}; }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 if uploaded_file is not None:
     source_bytes = uploaded_file.getvalue()
@@ -185,12 +218,11 @@ attempt_log = pd.DataFrame(attempts)
 audit = audit_frame(ranking)
 review_codes = ranking.loc[ranking["winner_review"], "code"].tolist()
 
-metric_columns = st.columns(5)
+metric_columns = st.columns(4)
 metric_columns[0].metric("Teams", diagnostics["team_count"])
 metric_columns[1].metric("Valid cracks", diagnostics["valid_count"])
 metric_columns[2].metric("Invalid attempts", diagnostics["invalid_count"])
-metric_columns[3].metric("Peer CV RMSE", f"{diagnostics['peer_cv_rmse']:.3f}")
-metric_columns[4].metric("Winner review", len(review_codes))
+metric_columns[3].metric("Winner review", len(review_codes))
 
 decision_tab, audit_tab, peer_tab, cracking_tab, method_tab = st.tabs(
     ["Decision", "Audit", "Peer fairness", "Cracking fairness", "Data & method"]
@@ -244,8 +276,8 @@ with decision_tab:
     plot_data = ranking.sort_values("adjusted_total")
     figure, axis = plt.subplots(figsize=(11, 7))
     positions = np.arange(len(plot_data))
-    axis.barh(positions - 0.18, plot_data["current_total"], height=0.34, color="#a7b6c2", label="Raw total")
-    axis.barh(positions + 0.18, plot_data["adjusted_total"], height=0.34, color="#007a78", label="Fair score")
+    axis.barh(positions - 0.18, plot_data["current_total"], height=0.34, color=colours["raw"], label="Raw total")
+    axis.barh(positions + 0.18, plot_data["adjusted_total"], height=0.34, color=colours["teal"], label="Fair score")
     axis.set(yticks=positions, yticklabels=plot_data["code"], xlabel="Points", title="Raw and fair scores")
     axis.legend(frameon=False, ncol=2)
     style_axes(axis)
@@ -312,9 +344,9 @@ with peer_tab:
             raw_peer = 100 * peer_view["peer"].to_numpy()
             adjusted_peer = 100 * peer_view["adjusted_peer"].to_numpy()
             for position, raw, adjusted in zip(positions, raw_peer, adjusted_peer):
-                axis.plot([raw, adjusted], [position, position], color="#a7b6c2", linewidth=1.5)
-            axis.scatter(raw_peer, positions, color="#70838f", label="Raw", zorder=3)
-            axis.scatter(adjusted_peer, positions, color="#007a78", label="Adjusted", zorder=3)
+                axis.plot([raw, adjusted], [position, position], color=colours["raw"], linewidth=1.5)
+            axis.scatter(raw_peer, positions, color=colours["raw"], label="Raw", zorder=3)
+            axis.scatter(adjusted_peer, positions, color=colours["teal"], label="Adjusted", zorder=3)
             axis.set(yticks=positions, yticklabels=peer_view["code"], xlabel="Peer score (%)", title="Raw and adjusted peer scores")
             axis.legend(frameon=False)
             style_axes(axis)
@@ -323,9 +355,9 @@ with peer_tab:
         with right:
             rater_points = 100 * rater_view["peer_rater_effect"]
             figure, axis = plt.subplots(figsize=(7, 7))
-            colours = np.where(rater_points < 0, "#2878a5", "#d97941")
-            axis.barh(rater_view["code"], rater_points, color=colours)
-            axis.axvline(0, color="#333333", linewidth=1)
+            bar_colours = np.where(rater_points < 0, colours["blue"], colours["amber"])
+            axis.barh(rater_view["code"], rater_points, color=bar_colours)
+            axis.axvline(0, color=colours["zero"], linewidth=1)
             axis.set(
                 xlabel="Difference from an average rater (percentage points)",
                 title="How each team marked other teams",
@@ -355,6 +387,7 @@ with peer_tab:
             f"mean-only baseline: {diagnostics['peer_baseline_rmse']:.3f}. Lower is better."
         )
     with peer_math_tab:
+        st.markdown('<a id="peer-regularisation-maths"></a>', unsafe_allow_html=True)
         st.subheader("How peer scores are regularised")
         st.markdown(
             "Each completed peer-rating cell contributes one observation. The row identifies the team being rated; "
@@ -392,9 +425,9 @@ with cracking_tab:
         with schedule_column:
             schedule = ranking.sort_values("schedule_easiness")
             figure, axis = plt.subplots(figsize=(7, 7))
-            colours = np.where(schedule["schedule_easiness"] > schedule["schedule_easiness"].mean(), "#d97941", "#2878a5")
-            axis.barh(schedule["code"], 100 * schedule["schedule_easiness"], color=colours)
-            axis.axvline(100 * schedule["schedule_easiness"].mean(), color="#333333", linestyle="--", label="Mean")
+            bar_colours = np.where(schedule["schedule_easiness"] > schedule["schedule_easiness"].mean(), colours["amber"], colours["blue"])
+            axis.barh(schedule["code"], 100 * schedule["schedule_easiness"], color=bar_colours)
+            axis.axvline(100 * schedule["schedule_easiness"].mean(), color=colours["zero"], linestyle="--", label="Mean")
             axis.set(xlabel="Expected crack rate for an average team (%)", title="Difficulty of each team's schedule")
             axis.legend(frameon=False)
             style_axes(axis)
@@ -406,22 +439,32 @@ with cracking_tab:
             lower = 100 * uncertainty["attack_low"].to_numpy()
             upper = 100 * uncertainty["attack_high"].to_numpy()
             figure, axis = plt.subplots(figsize=(7, 7))
-            axis.errorbar(estimate, uncertainty["code"], xerr=[estimate - lower, upper - estimate], fmt="o", color="#007a78", ecolor="#70838f", capsize=3)
+            axis.errorbar(estimate, uncertainty["code"], xerr=[estimate - lower, upper - estimate], fmt="o", color=colours["teal"], ecolor=colours["raw"], capsize=3)
             axis.set(xlabel="Adjusted crack probability (%)", title="Cracking estimate and approximate 95% range", xlim=(0, 100))
             style_axes(axis)
             st.pyplot(figure, width="stretch")
             plt.close(figure)
 
-        burden = ranking.sort_values("invalid_attacks")
+        evidence = ranking.assign(
+            usable_evidence=lambda frame: frame["valid_attacks"] + frame["valid_defences"]
+        ).sort_values("usable_evidence")
         figure, axis = plt.subplots(figsize=(11, 6))
-        axis.barh(burden["code"], burden["valid_attacks"], color="#2878a5", label="Valid")
-        axis.barh(burden["code"], burden["invalid_attacks"], left=burden["valid_attacks"], color="#d97941", label="Invalid / unreliable")
-        axis.set(xlabel="Recorded attacking attempts", title="Usable cracking evidence")
+        positions = np.arange(len(evidence))
+        axis.barh(positions - 0.18, evidence["valid_attacks"], height=0.34, color=colours["blue"], label="Usable attacks")
+        axis.barh(positions + 0.18, evidence["valid_defences"], height=0.34, color=colours["teal"], label="Usable defences")
+        axis.set(
+            yticks=positions,
+            yticklabels=evidence["code"],
+            xlabel="Usable attempts",
+            title="Usable cracking evidence: attacks and defences",
+        )
         axis.legend(frameon=False, ncol=2)
         style_axes(axis)
         st.pyplot(figure, width="stretch")
         plt.close(figure)
+        st.caption("Usable evidence includes only valid 0/1 outcomes. Invalid or unreliable attempts are excluded from both bars.")
     with cracking_math_tab:
+        st.markdown('<a id="cracking-regularisation-maths"></a>', unsafe_allow_html=True)
         st.subheader("How cracking scores are regularised")
         st.markdown(
             "Every usable attempt is treated as a contest between an attacker and a defending safe. A recorded 1 means "
@@ -453,6 +496,10 @@ with cracking_tab:
         )
 
 with method_tab:
+    st.markdown(
+        "**Regularisation maths:** [peer scores](#peer-regularisation-maths) · "
+        "[cracking and resistance scores](#cracking-regularisation-maths)"
+    )
     st.subheader("Data quality")
     invalid_share = diagnostics["invalid_count"] / diagnostics["attempt_count"]
     quality = pd.DataFrame(
